@@ -8,7 +8,7 @@ from typing import Iterable
 
 import streamlit as st
 
-from .models import RealfunResponse, RecommendedSlot
+from .models import CopilotResponse, RecommendedSlot
 
 
 INTENT_COLORS = {
@@ -46,37 +46,48 @@ def render_intent_badge(intent: str) -> None:
 
 
 def render_recommended_slots(slots: Iterable[RecommendedSlot]) -> None:
-    """Render recommended slots in a table-friendly format."""
+    """Render recommended slots in both table and enumerated list form."""
 
-    rows = []
-    for slot in slots:
-        rows.append(
-            {
-                "Label": slot.label,
-                "Internal code": slot.internal_code or "",
-                "Confidence": _format_confidence(slot.confidence),
-            }
-        )
-    if rows:
-        st.table(rows)
-    else:
+    slots = list(slots)
+    if not slots:
         st.info("No slot recommendations returned.")
+        return
+
+    rows = [
+        {
+            "Label": slot.label,
+            "Internal code": slot.internal_code or "",
+            "Confidence": _format_confidence(slot.confidence),
+        }
+        for slot in slots
+    ]
+    st.table(rows)
+
+    # Provide an enumerated list to copy/paste to parents.
+    st.markdown("**Options to share with parents:**")
+    for idx, slot in enumerate(slots, start=1):
+        desc = slot.label
+        if slot.internal_code:
+            desc += f" (code: {slot.internal_code})"
+        st.markdown(f"{idx}. {desc}")
 
 
 def render_warnings(warnings: list[str]) -> None:
-    """Show warnings as a single Streamlit warning box."""
+    """Show warnings in a collapsible panel to reduce visual noise."""
 
     if not warnings:
         return
-    formatted = "\n".join(f"- {warning}" for warning in warnings)
-    st.warning(formatted)
+    with st.expander("Warnings & follow-ups"):
+        formatted = "\n".join(f"- {warning}" for warning in warnings)
+        st.warning(formatted)
 
 
 def render_whatsapp_message(message: str) -> None:
     """Render WhatsApp message and provide a copy-to-clipboard helper."""
 
-    st.text_area("WhatsApp message", value=message, height=220, key="whatsapp_message_box")
-    payload = json.dumps(message)
+    cleaned_message = message.strip()
+    st.text_area("WhatsApp message", value=cleaned_message, height=220, key="whatsapp_message_box")
+    payload = json.dumps(cleaned_message)
     copy_button = f"""
     <button onclick='navigator.clipboard.writeText({payload})'
             style="margin-top:8px;padding:8px 12px;border-radius:6px;border:1px solid #ccc;cursor:pointer;">
@@ -86,7 +97,7 @@ def render_whatsapp_message(message: str) -> None:
     st.markdown(copy_button, unsafe_allow_html=True)
 
 
-def render_response(response: RealfunResponse) -> None:
+def render_response(response: CopilotResponse) -> None:
     """Render the full response panel."""
 
     render_intent_badge(response.intent)
@@ -115,4 +126,3 @@ __all__ = [
     "render_warnings",
     "render_whatsapp_message",
 ]
-

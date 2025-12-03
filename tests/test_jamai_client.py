@@ -3,15 +3,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.jamai_client import JamAIResponseError, call_realfun_action_table
-from app.models import RealfunRequest
+from app.jamai_client import JamAIResponseError, call_action_table
+from app.models import CopilotRequest
 
 
 def _make_completion(columns: dict) -> SimpleNamespace:
     return SimpleNamespace(rows=[SimpleNamespace(columns=columns)])
 
 
-def test_call_realfun_action_table_builds_request_and_parses(monkeypatch):
+def test_call_action_table_builds_request_and_parses(monkeypatch):
     captured = {}
     fake_completion = _make_completion(
         {
@@ -41,12 +41,12 @@ def test_call_realfun_action_table_builds_request_and_parses(monkeypatch):
             return fake_completion
 
     fake_client = SimpleNamespace(table=FakeTable())
-    fake_settings = SimpleNamespace(jamai_action_table_id="realfun_requests")
+    fake_settings = SimpleNamespace(jamai_action_table_id="admin_requests")
 
     monkeypatch.setattr("app.jamai_client.get_client", lambda: fake_client)
     monkeypatch.setattr("app.jamai_client.get_settings", lambda: fake_settings)
 
-    request = RealfunRequest(
+    request = CopilotRequest(
         student_name="Ada Lovelace",
         student_level="Level 1",
         current_mode="online",
@@ -54,7 +54,7 @@ def test_call_realfun_action_table_builds_request_and_parses(monkeypatch):
         raw_request="Can we move to an online slot on Saturday afternoon?",
     )
 
-    response = call_realfun_action_table(request)
+    response = call_action_table(request)
 
     assert captured["table_type"] == "action"
     assert captured["payload"].table_id == fake_settings.jamai_action_table_id
@@ -66,7 +66,7 @@ def test_call_realfun_action_table_builds_request_and_parses(monkeypatch):
     assert response.warnings == ["Confirm teacher availability"]
 
 
-def test_call_realfun_action_table_handles_malformed_slots(monkeypatch):
+def test_call_action_table_handles_malformed_slots(monkeypatch):
     raw_slots = "• Sat 2pm online\n• Sun 4pm physical"
     fake_completion = _make_completion(
         {
@@ -84,12 +84,12 @@ def test_call_realfun_action_table_handles_malformed_slots(monkeypatch):
             return fake_completion
 
     fake_client = SimpleNamespace(table=FakeTable())
-    fake_settings = SimpleNamespace(jamai_action_table_id="realfun_requests")
+    fake_settings = SimpleNamespace(jamai_action_table_id="admin_requests")
 
     monkeypatch.setattr("app.jamai_client.get_client", lambda: fake_client)
     monkeypatch.setattr("app.jamai_client.get_settings", lambda: fake_settings)
 
-    request = RealfunRequest(
+    request = CopilotRequest(
         student_name="Alan Turing",
         student_level="Level 2",
         current_mode="physical",
@@ -97,9 +97,8 @@ def test_call_realfun_action_table_handles_malformed_slots(monkeypatch):
         raw_request="Need to move the class this week.",
     )
 
-    response = call_realfun_action_table(request)
+    response = call_action_table(request)
 
     assert response.recommended_slots[0].label.startswith("• Sat")
     assert response.chosen_slot is None
     assert response.warnings == ["Double check teacher roster"]
-

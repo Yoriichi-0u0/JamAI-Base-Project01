@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import logging
 
-from .jamai_client import call_realfun_action_table
-from .models import RealfunRequest, RealfunResponse
+from .jamai_client import call_action_table
+from .models import CopilotRequest, CopilotResponse
 
 LOGGER = logging.getLogger(__name__)
 
@@ -17,9 +17,9 @@ def process_parent_request(
     current_slot: str,
     raw_request: str,
     notes: str = "",
-) -> RealfunResponse:
+) -> CopilotResponse:
     """
-    Build a RealfunRequest and call JamAI Base.
+    Build a CopilotRequest and call JamAI Base.
 
     Args:
         student_name: Name of the student.
@@ -30,7 +30,7 @@ def process_parent_request(
         notes: Optional internal notes.
 
     Returns:
-        Parsed RealfunResponse from JamAI Base.
+        Parsed CopilotResponse from JamAI Base.
 
     Raises:
         ValueError: If mandatory fields are missing.
@@ -47,7 +47,7 @@ def process_parent_request(
     if not normalized_request:
         raise ValueError("Parent request cannot be empty.")
 
-    request_payload = RealfunRequest(
+    request_payload = CopilotRequest(
         student_name=normalized_student,
         student_level=normalized_level,
         current_mode=current_mode.strip(),
@@ -56,9 +56,8 @@ def process_parent_request(
         notes=notes.strip() or None,
     )
 
-    LOGGER.debug("Sending RealfunRequest to JamAI: %s", request_payload.dict())
-    return call_realfun_action_table(request_payload)
+    LOGGER.debug("Sending CopilotRequest to JamAI: %s", request_payload.dict())
+    return call_action_table(request_payload)
 
 
 __all__ = ["process_parent_request"]
-

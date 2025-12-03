@@ -1,13 +1,19 @@
-"""Streamlit entrypoint for the Realfun AI Admin Copilot."""
+"""Streamlit entrypoint for the AI Admin Copilot."""
 
 from __future__ import annotations
 
 import logging
+import sys
+from pathlib import Path
 
 import streamlit as st
 
-from .services import process_parent_request
-from .ui import render_response
+# Ensure package imports work when running via `streamlit run app/main_app.py`
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app.services import process_parent_request
+from app.ui import render_response
 
 LOGGER = logging.getLogger(__name__)
 
@@ -21,10 +27,10 @@ def _init_session_state() -> None:
 def run() -> None:
     """Render the Streamlit application."""
 
-    st.set_page_config(page_title="Realfun AI Admin Copilot", layout="wide")
+    st.set_page_config(page_title="AI Admin Copilot", layout="wide")
     _init_session_state()
 
-    st.title("Realfun AI Admin Copilot")
+    st.title("AI Admin Copilot")
     st.write(
         "Draft fast, consistent WhatsApp replies for parent schedule requests using JamAI Base."
     )
@@ -32,38 +38,38 @@ def run() -> None:
     left, right = st.columns(2)
 
     with left:
-        with st.form("realfun_request_form"):
-            student_name = st.text_input("Student name", key="student_name")
+        with st.form("admin_request_form"):
+            student_name = st.text_input("Student Name", key="student_name")
             student_level = st.selectbox(
-                "Student level",
-                options=["Level 1", "Level 2", "Level 3", "Unknown"],
+                "Student Level",
+                options=["Level 0", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6"],
                 key="student_level",
             )
             current_mode = st.radio(
-                "Current mode",
-                options=["online", "physical", "mixed", "unknown"],
+                "Current Mode",
+                options=["Online", "Physical"],
                 key="current_mode",
             )
             current_slot = st.text_input(
-                "Current slot",
+                "Current Slot",
                 help="Optional. Example: Sat 1-2.30 pm",
                 key="current_slot",
             )
             raw_request = st.text_area(
-                "Parent request",
+                "Parent Request",
                 height=150,
                 key="raw_request",
                 help="Paste the parent's WhatsApp message or email content.",
             )
             notes = st.text_area(
-                "Internal notes",
+                "Internal Notes",
                 height=100,
                 key="internal_notes",
                 help="Optional context for the AI such as history or constraints.",
             )
 
             submit = st.form_submit_button(
-                "Generate recommendation",
+                "Generate Recommendation",
                 disabled=st.session_state["request_inflight"],
             )
 
@@ -101,4 +107,3 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
-

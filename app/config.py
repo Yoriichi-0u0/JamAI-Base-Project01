@@ -1,4 +1,4 @@
-"""Application configuration for Realfun AI Admin Copilot."""
+"""Application configuration for the AI Admin Copilot."""
 
 from functools import lru_cache
 

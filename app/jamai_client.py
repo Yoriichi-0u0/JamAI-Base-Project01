@@ -1,17 +1,18 @@
-"""Wrapper around the JamAI Base Python SDK."""
+"""Wrapper around the JamAI Base Python SDK for the AI Admin Copilot."""
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 from functools import lru_cache
 from json import JSONDecodeError
 from typing import Any, Iterable, List, Optional
 
 from jamaibase import JamAI, types as t
 
-from .config import get_settings, Settings
-from .models import RealfunRequest, RealfunResponse, RecommendedSlot
+from .config import Settings, get_settings
+from .models import CopilotRequest, CopilotResponse, RecommendedSlot
 
 
 LOGGER = logging.getLogger(__name__)
@@ -50,6 +51,81 @@ def _coerce_float(value: Any) -> Optional[float]:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _extract_completion_content(text: str) -> Optional[str]:
+    """
+    Attempt to pull the assistant message content out of a ChatCompletion-style string.
+    """
+
+    match = re.search(r"content='(.*?)'", text, flags=re.DOTALL)
+    if match:
+        return match.group(1)
+    match = re.search(r'"content":\s*"([^"]+)"', text, flags=re.DOTALL)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _normalize_text_field(value: Any) -> str:
+    """
+    Normalize a field that may come back as a complex object or verbose string.
+    """
+
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    extracted = _extract_completion_content(text)
+    if extracted:
+        return extracted.strip()
+
+    # If the string looks like a ChatCompletion dump, trim before usage/metadata.
+    if "ChatCompletion" in text or "chatcmpl" in text:
+        parts = text.split("usage=", 1)
+        text = parts[0].strip()
+        text = text.replace("choices=[", "").replace("message=", "")
+        # Remove repeated prefixes like "ChatCompletionChoice(index=0,"
+        text = re.sub(r"ChatCompletion\w*\([^)]*\)", "", text).strip(" ,[]")
+    return text
+
+
+def _looks_like_completion_blob(text: str) -> bool:
+    lowered = text.lower()
+    return ("chatcompletion" in lowered or "chatcmpl" in lowered) and ("id=" in lowered or "object=" in lowered)
+
+
+def _build_fallback_message(summary: str, slots: List[RecommendedSlot], chosen: Optional[RecommendedSlot]) -> str:
+    """
+    Construct a human-friendly WhatsApp draft if the backend returns a blob.
+    """
+
+    lines = ["Hi! Here is a quick summary and options based on your request:"]
+    if summary:
+        lines.append(f"- Summary: {summary}")
+    if chosen:
+        lines.append(f"- Suggested slot: {chosen.label}")
+    elif slots:
+        lines.append("- Recommended slots:")
+        for idx, slot in enumerate(slots[:5], start=1):
+            lines.append(f"  {idx}. {slot.label}")
+    lines.append("Please reply with your preferred option (or share a new timing), and we will confirm with the teacher.")
+    return "\n".join(lines)
+
+
+def _simplify_warning_text(value: Any) -> str:
+    """
+    Produce a concise warning string, trimming oversized blobs.
+    """
+
+    text = _normalize_text_field(value)
+    if not text:
+        return ""
+    max_len = 400
+    if len(text) > max_len:
+        return text[:max_len].rstrip() + "..."
+    return text
 
 
 def _parse_recommended_slots(raw: str) -> List[RecommendedSlot]:
@@ -95,7 +171,7 @@ def _parse_recommended_slots(raw: str) -> List[RecommendedSlot]:
 def _parse_chosen_slot(raw: str, options: Iterable[RecommendedSlot]) -> Optional[RecommendedSlot]:
     if not raw:
         return None
-    cleaned = raw.strip()
+    cleaned = _normalize_text_field(raw)
     try:
         parsed = json.loads(cleaned)
     except JSONDecodeError:
@@ -119,9 +195,9 @@ def _parse_warnings(raw: Any) -> List[str]:
     if raw is None:
         return []
     if isinstance(raw, list):
-        return [str(item) for item in raw if str(item).strip()]
+        return [_simplify_warning_text(item) for item in raw if _simplify_warning_text(item)]
     if isinstance(raw, str):
-        cleaned = raw.strip()
+        cleaned = _simplify_warning_text(raw)
         if not cleaned:
             return []
         try:
@@ -129,9 +205,10 @@ def _parse_warnings(raw: Any) -> List[str]:
         except JSONDecodeError:
             return [line.strip() for line in cleaned.splitlines() if line.strip()]
         if isinstance(parsed, list):
-            return [str(item).strip() for item in parsed if str(item).strip()]
+            return [_simplify_warning_text(item) for item in parsed if _simplify_warning_text(item)]
         return [cleaned]
-    return [str(raw)]
+    normalized = _simplify_warning_text(raw)
+    return [normalized] if normalized else []
 
 
 def _extract_columns(completion: Any) -> dict[str, Any]:
@@ -150,15 +227,15 @@ def _extract_columns(completion: Any) -> dict[str, Any]:
     return columns
 
 
-def call_realfun_action_table(req: RealfunRequest) -> RealfunResponse:
+def call_action_table(req: CopilotRequest) -> CopilotResponse:
     """
-    Send a RealfunRequest to the JamAI Action Table and parse the response.
+    Send a CopilotRequest to the JamAI Action Table and parse the response.
 
     Args:
         req: Normalized request payload.
 
     Returns:
-        Parsed RealfunResponse ready for the UI.
+        Parsed CopilotResponse ready for the UI.
 
     Raises:
         JamAIResponseError: When parsing fails or response is incomplete.
@@ -185,14 +262,14 @@ def call_realfun_action_table(req: RealfunRequest) -> RealfunResponse:
             ),
         )
         columns = _extract_columns(completion)
-        intent = str(columns.get("intent", "")).strip()
-        summary = str(columns.get("summary", "")).strip()
-        slot_options_raw = str(columns.get("slot_options", "") or "")
-        chosen_slot_raw = str(columns.get("chosen_slot", "") or "")
-        whatsapp_message = str(columns.get("whatsapp_message", "")).strip()
+        intent = _normalize_text_field(columns.get("intent", ""))
+        summary = _normalize_text_field(columns.get("summary", ""))
+        slot_options_raw = _normalize_text_field(columns.get("slot_options", "") or "")
+        chosen_slot_raw = _normalize_text_field(columns.get("chosen_slot", "") or "")
+        whatsapp_message = _normalize_text_field(columns.get("whatsapp_message", ""))
         warnings_raw = columns.get("warnings", "")
 
-        if not intent or not summary or not whatsapp_message:
+        if not intent or not summary:
             raise JamAIResponseError("JamAI response is missing required fields.")
 
         recommended_slots = _parse_recommended_slots(slot_options_raw)
@@ -202,7 +279,10 @@ def call_realfun_action_table(req: RealfunRequest) -> RealfunResponse:
         chosen_slot = _parse_chosen_slot(chosen_slot_raw, recommended_slots)
         warnings = _parse_warnings(warnings_raw)
 
-        return RealfunResponse(
+        if not whatsapp_message or _looks_like_completion_blob(whatsapp_message):
+            whatsapp_message = _build_fallback_message(summary, recommended_slots, chosen_slot)
+
+        return CopilotResponse(
             intent=intent,
             summary=summary,
             recommended_slots=recommended_slots,
@@ -219,8 +299,7 @@ def call_realfun_action_table(req: RealfunRequest) -> RealfunResponse:
 
 __all__ = [
     "JamAIResponseError",
-    "call_realfun_action_table",
+    "call_action_table",
     "create_client",
     "get_client",
 ]
-

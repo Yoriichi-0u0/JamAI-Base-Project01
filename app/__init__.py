@@ -1,2 +1,1 @@
-"""Realfun AI Admin Copilot package."""
-
+"""AI Admin Copilot package."""

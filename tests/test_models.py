@@ -1,9 +1,9 @@
-from app.models import RealfunResponse, RecommendedSlot
+from app.models import CopilotResponse, RecommendedSlot
 
 
-def test_realfun_response_instantiation():
+def test_copilot_response_instantiation():
     slot = RecommendedSlot(label="Saturday 3-4.30 pm Online", internal_code="SAT_1500_1630_ONLINE", confidence=0.92)
-    response = RealfunResponse(
+    response = CopilotResponse(
         intent="reschedule",
         summary="Move to a weekend online slot.",
         recommended_slots=[slot],
@@ -16,4 +16,3 @@ def test_realfun_response_instantiation():
     assert response.chosen_slot is None
     assert response.recommended_slots[0].label.startswith("Saturday")
     assert len(response.warnings) == 2
-

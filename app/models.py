@@ -1,11 +1,11 @@
-"""Pydantic models representing requests and responses for Realfun AI."""
+"""Pydantic models representing requests and responses for the AI Admin Copilot."""
 
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
 
-class RealfunRequest(BaseModel):
+class CopilotRequest(BaseModel):
     """
     Normalized representation of a parent request for scheduling assistance.
 
@@ -28,7 +28,7 @@ class RealfunRequest(BaseModel):
 
 class RecommendedSlot(BaseModel):
     """
-    Slot recommendation parsed from JamAI output.
+    Slot recommendation parsed from the JamAI output.
 
     Attributes:
         label: Human friendly slot description.
@@ -41,7 +41,7 @@ class RecommendedSlot(BaseModel):
     confidence: Optional[float] = None
 
 
-class RealfunResponse(BaseModel):
+class CopilotResponse(BaseModel):
     """
     Structured AI response ready for the Streamlit UI.
 
@@ -62,5 +62,4 @@ class RealfunResponse(BaseModel):
     warnings: List[str] = Field(default_factory=list)
 
 
-__all__ = ["RealfunRequest", "RecommendedSlot", "RealfunResponse"]
-
+__all__ = ["CopilotRequest", "RecommendedSlot", "CopilotResponse"]
